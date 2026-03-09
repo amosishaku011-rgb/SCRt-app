@@ -1,0 +1,13 @@
+{
+  "short_name": "SCRt",
+  "name": "SCRt — Start College Right",
+  "description": "Plan your community college transfer path",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0a0a0f",
+  "background_color": "#0a0a0f",
+  "icons": [
+    { "src": "https://via.placeholder.com/192x192/6c63ff/ffffff?text=SCRt", "sizes": "192x192", "type": "image/png" },
+    { "src": "https://via.placeholder.com/512x512/6c63ff/ffffff?text=SCRt", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -629,15 +629,7 @@ function StepCourses({program, ccSchoolId, ccCourses, onSubmit, onBack}) {
       <div className="credit-bar">
         <div className="credit-item">
           <div className="credit-num purple">{chosen.length}</div>
-          <div className="credit-lbl">Selected</div>
-        </div>
-        <div className="credit-item">
-          <div className="credit-num green">{xferCount}</div>
-          <div className="credit-lbl">Transferable</div>
-        </div>
-        <div className="credit-item">
-          <div className="credit-num green">{xferCr}</div>
-          <div className="credit-lbl">Transfer Credits</div>
+          <div className="credit-lbl">Courses Selected</div>
         </div>
         <div className="credit-item">
           <div className="credit-num" style={{color:"var(--text2)"}}>{program.totalCredits}</div>
@@ -659,9 +651,6 @@ function StepCourses({program, ccSchoolId, ccCourses, onSubmit, onBack}) {
                 <span className="course-code">{c.code}</span>
                 <span className="course-name">{c.name}</span>
                 <span className="course-cr">{c.credits}cr</span>
-                <span className={`course-xfer ${c.transferable?"yes":"no"}`}>
-                  {c.transferable ? "✓ transfers" : "✗ no transfer"}
-                </span>
               </div>
             );
           })}

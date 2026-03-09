@@ -41,30 +41,23 @@ const SEED_PROGRAMS = [
 ];
 const SEED_CC = {
   che:[
-    // Math
+    // ── Mathematics (all transfer to UIC equivalents) ──
     {code:"MATH 150",name:"Calculus I",credits:5,transferable:true,mapsTo:"MATH 180"},
     {code:"MATH 229",name:"Calculus II",credits:4,transferable:true,mapsTo:"MATH 181"},
-    {code:"MATH 230",name:"Calculus III (Multivariable)",credits:4,transferable:true,mapsTo:"MATH 210"},
+    {code:"MATH 230",name:"Calculus III — Multivariable",credits:4,transferable:true,mapsTo:"MATH 210"},
     {code:"MATH 252",name:"Differential Equations",credits:3,transferable:true,mapsTo:"MATH 220"},
-    // Physics
+    // ── Physics ──
     {code:"PHYS 201",name:"Physics I — Mechanics",credits:4,transferable:true,mapsTo:"PHYS 141"},
     {code:"PHYS 202",name:"Physics II — Electricity & Magnetism",credits:4,transferable:true,mapsTo:"PHYS 142"},
-    // Chemistry
-    {code:"CHEM 101",name:"General Chemistry I",credits:5,transferable:true,mapsTo:"CHEM 122"},
-    {code:"CHEM 102",name:"General Chemistry II",credits:5,transferable:true,mapsTo:"CHEM 123"},
-    {code:"CHEM 103",name:"General Chemistry Lab",credits:1,transferable:true,mapsTo:"CHEM 124"},
-    {code:"CHEM 104",name:"General Chemistry Lab II",credits:1,transferable:true,mapsTo:"CHEM 125"},
+    // ── Chemistry ──
+    {code:"CHEM 101",name:"General Chemistry I (Lecture)",credits:3,transferable:true,mapsTo:"CHEM 122"},
+    {code:"CHEM 101L",name:"General Chemistry I (Lab)",credits:1,transferable:true,mapsTo:"CHEM 124"},
+    {code:"CHEM 102",name:"General Chemistry II (Lecture)",credits:3,transferable:true,mapsTo:"CHEM 123"},
+    {code:"CHEM 102L",name:"General Chemistry II (Lab)",credits:1,transferable:true,mapsTo:"CHEM 125"},
     {code:"CHEM 201",name:"Organic Chemistry I",credits:4,transferable:true,mapsTo:"CHEM 232"},
-    // Engineering & CS
+    // ── Engineering & Computing ──
     {code:"ENGR 100",name:"Introduction to Engineering",credits:1,transferable:true,mapsTo:"ENGR 100"},
-    {code:"CS 111",name:"Introduction to Programming (Python/MATLAB)",credits:3,transferable:true,mapsTo:"CS 109"},
-    // English / Gen Ed
-    {code:"ENGL 101",name:"Composition I",credits:3,transferable:true,mapsTo:"ENGL 160"},
-    {code:"ENGL 102",name:"Composition II",credits:3,transferable:true,mapsTo:"ENGL 161"},
-    // Non-transferable CC courses
-    {code:"CHE 101",name:"Intro to Chemical Engineering (CC)",credits:2,transferable:false,mapsTo:null},
-    {code:"BIOL 121",name:"General Biology",credits:4,transferable:false,mapsTo:null},
-    {code:"CHEM 202",name:"Organic Chemistry II (Lab)",credits:1,transferable:false,mapsTo:null},
+    {code:"CS 111",name:"Scientific Programming (Python/MATLAB)",credits:3,transferable:true,mapsTo:"CS 109"},
   ],
   cs:[
     {code:"CS 121",name:"Intro to Programming",credits:3,transferable:true,mapsTo:"CS 111"},
@@ -442,9 +435,9 @@ const CSS = `
   }
 `;
 
-// ─── Steps ────────────────────────────────────────────────────────────────────
+// ─── Steps ──────────────────────────────────────────────────────────────────
 function Steps({step}) {
-  const labels = ["Program","Courses","Report","Roadmap"];
+  const labels = ["Program","School","My Courses","Report","Roadmap"];
   return (
     <div className="progress-wrap">
       <div className="progress-steps">
@@ -470,43 +463,35 @@ function Steps({step}) {
   );
 }
 
-// ─── Step 1: Search ───────────────────────────────────────────────────────────
-function StepSearch({programs, schools, onSelect}) {
+// ─── Step 1: Select Program ───────────────────────────────────────────────────
+function StepProgram({programs, onSelect}) {
   const [q,setQ] = useState("");
-  const [school,setSchool] = useState(null);
   const [picked,setPicked] = useState(null);
-  const unis = schools.filter(s=>s.type==="university");
-  const list = programs.filter(p =>
-    (!school || p.school===school.id) &&
-    (!q.trim() || p.name.toLowerCase().includes(q.toLowerCase()))
-  );
+
+  // Get unique program names across all schools
+  const uniqueNames = [...new Set(programs.map(p=>p.name))];
+  const filtered = uniqueNames.filter(n => !q.trim() || n.toLowerCase().includes(q.toLowerCase()));
+
   return (
     <div className="fade">
-      <h2 className="step-title">Find Your Degree</h2>
-      <p className="step-sub">Search for the program you want to transfer into. We'll build your personalized plan.</p>
+      <h2 className="step-title">What do you want to study?</h2>
+      <p className="step-sub">Search for your intended degree program. We'll find which universities offer it.</p>
       <div className="search-box">
         <span className="search-icon">🔍</span>
-        <input className="search-input" value={q} onChange={e=>setQ(e.target.value)} placeholder="Search e.g. Chemical Engineering, Nursing…"/>
-      </div>
-      <div className="school-pills">
-        <span className="pill-label">Filter:</span>
-        {unis.map(s=>(
-          <button key={s.id} onClick={()=>setSchool(x=>x?.id===s.id?null:s)} className={`school-pill ${school?.id===s.id?"active":""}`}>
-            {s.short}
-          </button>
-        ))}
+        <input className="search-input" value={q} onChange={e=>setQ(e.target.value)} placeholder="e.g. Chemical Engineering, Nursing, Computer Science…"/>
       </div>
       <div className="prog-grid">
-        {list.length===0 && <p className="empty">No programs found.</p>}
-        {list.map(p => {
-          const sc = schools.find(s=>s.id===p.school);
-          const sel = picked?.id===p.id;
+        {filtered.length===0 && <p className="empty">No programs found. Try a different search.</p>}
+        {filtered.map(name => {
+          const progs = programs.filter(p=>p.name===name);
+          const p = progs[0];
+          const sel = picked===name;
           return (
-            <div key={p.id} onClick={()=>setPicked(x=>x?.id===p.id?null:p)} className={`prog-card ${sel?"selected":""}`}>
-              <span className="prog-icon">{p.icon}</span>
+            <div key={name} onClick={()=>setPicked(x=>x===name?null:name)} className={`prog-card ${sel?"selected":""}`}>
+              <span className="prog-icon">{p.icon||"📚"}</span>
               <div className="prog-info">
-                <div className="prog-name">{p.name}</div>
-                <div className="prog-meta">{sc?.name} · {p.totalCredits} credits to graduate</div>
+                <div className="prog-name">{name}</div>
+                <div className="prog-meta">{progs.length} school{progs.length!==1?"s":""} offer this program</div>
               </div>
               <div className={`prog-check ${sel?"on":""}`}>{sel&&"✓"}</div>
             </div>
@@ -517,34 +502,92 @@ function StepSearch({programs, schools, onSelect}) {
         <div className="selected-bar">
           <div className="selected-info">
             <div className="selected-label">✓ Selected</div>
-            <div className="selected-name">{picked.icon} {picked.name}</div>
+            <div className="selected-name">{programs.find(p=>p.name===picked)?.icon} {picked}</div>
           </div>
         </div>
       )}
       <div className="btn-row">
         <span style={{fontSize:"12px",color:"var(--text3)"}}>
-          {picked ? "" : "← Select a program above"}
+          {!picked && "← Select a program above"}
         </span>
-        <button className="btn btn-primary" disabled={!picked} onClick={()=>picked&&onSelect(picked)}>
-          Next: My Courses →
+        <button className="btn btn-primary" disabled={!picked} onClick={()=>onSelect(picked)}>
+          Next: Choose School →
         </button>
       </div>
     </div>
   );
 }
 
-// ─── Step 2: Courses ──────────────────────────────────────────────────────────
+// ─── Step 2: Select School ────────────────────────────────────────────────────
+function StepSchool({programName, programs, schools, onSelect, onBack}) {
+  const [picked,setPicked] = useState(null);
+  const matching = programs.filter(p=>p.name===programName);
+
+  return (
+    <div className="fade">
+      <h2 className="step-title">Which school?</h2>
+      <p className="step-sub">These universities offer <strong>{programName}</strong>. Pick the one you're transferring to.</p>
+      <div className="prog-grid">
+        {matching.map(p => {
+          const sc = schools.find(s=>s.id===p.school);
+          const sel = picked?.id===p.id;
+          return (
+            <div key={p.id} onClick={()=>setPicked(x=>x?.id===p.id?null:p)} className={`prog-card ${sel?"selected":""}`}>
+              <span className="prog-icon" style={{fontSize:18}}>🏫</span>
+              <div className="prog-info">
+                <div className="prog-name">{sc?.name||p.school}</div>
+                <div className="prog-meta">{p.name} · {p.totalCredits} credits to graduate</div>
+              </div>
+              <div className={`prog-check ${sel?"on":""}`}>{sel&&"✓"}</div>
+            </div>
+          );
+        })}
+      </div>
+      {picked && (
+        <div className="selected-bar">
+          <div className="selected-info">
+            <div className="selected-label">✓ Selected</div>
+            <div className="selected-name">🏫 {schools.find(s=>s.id===picked.school)?.name}</div>
+          </div>
+        </div>
+      )}
+      <div className="btn-row">
+        <button className="btn btn-ghost" onClick={onBack}>← Back</button>
+        <button className="btn btn-primary" disabled={!picked} onClick={()=>onSelect(picked)}>
+          Next: My CC Courses →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 3: Enter CC Courses ─────────────────────────────────────────────────
 function StepCourses({program, ccCourses, onSubmit, onBack}) {
-  const list = ccCourses[program.id]||[];
+  const available = ccCourses[program.id]||[];
+  const [q,setQ] = useState("");
   const [sel,setSel] = useState(new Set());
+
   const toggle = code => setSel(p=>{const s=new Set(p);s.has(code)?s.delete(code):s.add(code);return s;});
-  const chosen = list.filter(c=>sel.has(c.code));
+  const chosen = available.filter(c=>sel.has(c.code));
   const xferCr = chosen.filter(c=>c.transferable).reduce((a,c)=>a+c.credits,0);
   const xferCount = chosen.filter(c=>c.transferable).length;
+
+  const filtered = available.filter(c =>
+    !q.trim() ||
+    c.code.toLowerCase().includes(q.toLowerCase()) ||
+    c.name.toLowerCase().includes(q.toLowerCase())
+  );
+
   return (
     <div className="fade">
       <h2 className="step-title">Your CC Courses</h2>
-      <p className="step-sub">Check every course you've completed at community college. We'll figure out what transfers.</p>
+      <p className="step-sub">Search and select every course you completed at community college.</p>
+
+      <div className="search-box" style={{marginBottom:12}}>
+        <span className="search-icon">🔍</span>
+        <input className="search-input" value={q} onChange={e=>setQ(e.target.value)} placeholder="Search by course code or name…"/>
+      </div>
+
       <div className="credit-bar">
         <div className="credit-item">
           <div className="credit-num purple">{chosen.length}</div>
@@ -560,12 +603,17 @@ function StepCourses({program, ccCourses, onSubmit, onBack}) {
         </div>
         <div className="credit-item">
           <div className="credit-num" style={{color:"var(--text2)"}}>{program.totalCredits}</div>
-          <div className="credit-lbl">Needed to Graduate</div>
+          <div className="credit-lbl">Credits to Graduate</div>
         </div>
       </div>
-      {list.length===0 ? <p className="empty">No courses uploaded for this program yet.</p> : (
+
+      {available.length===0 ? (
+        <p className="empty">No courses have been uploaded for this program yet. Contact the university.</p>
+      ) : filtered.length===0 ? (
+        <p className="empty">No courses match your search.</p>
+      ) : (
         <div className="course-list">
-          {list.map(c => {
+          {filtered.map(c => {
             const on = sel.has(c.code);
             return (
               <div key={c.code} onClick={()=>toggle(c.code)} className={`course-row ${on?"on":""}`}>
@@ -581,6 +629,7 @@ function StepCourses({program, ccCourses, onSubmit, onBack}) {
           })}
         </div>
       )}
+
       <div className="btn-row">
         <button className="btn btn-ghost" onClick={onBack}>← Back</button>
         <button className="btn btn-primary" disabled={sel.size===0} onClick={()=>onSubmit(chosen)}>
@@ -591,7 +640,7 @@ function StepCourses({program, ccCourses, onSubmit, onBack}) {
   );
 }
 
-// ─── Step 3: Report ───────────────────────────────────────────────────────────
+// ─── Step 4: Transfer Report ──────────────────────────────────────────────────
 function StepResults({program, courses, schools, onNext, onBack}) {
   const yes = courses.filter(c=>c.transferable);
   const no  = courses.filter(c=>!c.transferable);
@@ -621,7 +670,7 @@ function StepResults({program, courses, schools, onNext, onBack}) {
         <div className="prog-bar-fill" style={{width:pct+"%"}}/>
       </div>
       {yes.length>0 && <>
-        <div className="section-label green">✓ Courses That Transfer ({yes.length})</div>
+        <div className="section-label green">✓ Transfers ({yes.length} courses · {cr} credits)</div>
         <div className="result-list">
           {yes.map(c=>(
             <div key={c.code} className="result-row xfer">
@@ -633,13 +682,13 @@ function StepResults({program, courses, schools, onNext, onBack}) {
         </div>
       </>}
       {no.length>0 && <>
-        <div className="section-label red">✗ Does Not Transfer ({no.length})</div>
+        <div className="section-label red">✗ Does Not Transfer ({no.length} courses)</div>
         <div className="result-list">
           {no.map(c=>(
             <div key={c.code} className="result-row noxfer">
               <span className="r-code r">{c.code}</span>
               <span className="r-name" style={{color:"var(--text3)"}}>{c.name}</span>
-              <span className="r-tag">{c.credits}cr · n/a</span>
+              <span className="r-tag">{c.credits}cr · not accepted</span>
             </div>
           ))}
         </div>
@@ -652,7 +701,7 @@ function StepResults({program, courses, schools, onNext, onBack}) {
   );
 }
 
-// ─── Step 4: Roadmap ──────────────────────────────────────────────────────────
+// ─── Step 5: Roadmap ──────────────────────────────────────────────────────────
 function StepRoadmap({program, courses, schools, requirements, onRestart, onBack}) {
   const [showMet, setShowMet] = useState(false);
   const xferCodes = new Set(courses.filter(c=>c.transferable).flatMap(c=>[c.code,c.mapsTo].filter(Boolean)));
@@ -668,10 +717,10 @@ function StepRoadmap({program, courses, schools, requirements, onRestart, onBack
         <div className="roadmap-banner-title">✦ Auto-Generated From Your Transfer Credits</div>
         <div className="roadmap-stats">
           {[
-            {n:reqs.length, l:"Requirements", c:"var(--text1)"},
-            {n:met.length,  l:"Already Met",  c:"var(--accent4)"},
-            {n:reqs.length-met.length, l:"Still Needed", c:"var(--accent3)"},
-            {n:road.length, l:"Semesters Left",c:"var(--accent)"},
+            {n:reqs.length,         l:"Total Requirements", c:"var(--text1)"},
+            {n:met.length,          l:"Already Met",        c:"var(--accent4)"},
+            {n:reqs.length-met.length, l:"Still Needed",    c:"var(--accent3)"},
+            {n:road.length,         l:"Semesters Left",     c:"var(--accent)"},
           ].map(s=>(
             <div key={s.l} className="rm-stat">
               <div className="rm-stat-n" style={{color:s.c}}>{s.n}</div>
@@ -681,7 +730,7 @@ function StepRoadmap({program, courses, schools, requirements, onRestart, onBack
         </div>
       </div>
 
-      {reqs.length===0 && <p className="empty">Degree requirements not yet uploaded. Contact the university.</p>}
+      {reqs.length===0 && <p className="empty">Degree requirements not yet uploaded by {sc?.name}. Check back soon.</p>}
 
       {reqs.length>0 && road.length===0 && (
         <div className="all-met">
@@ -692,26 +741,24 @@ function StepRoadmap({program, courses, schools, requirements, onRestart, onBack
       )}
 
       {road.length>0 && <>
-        {met.length>0 && (
-          <>
-            <button className="met-toggle" onClick={()=>setShowMet(x=>!x)}>
-              ✓ {met.length} requirements already satisfied {showMet?"▲":"▼"}
-            </button>
-            {showMet && (
-              <div className="result-list" style={{marginBottom:20}}>
-                {met.map(r=>(
-                  <div key={r.code} className="result-row xfer">
-                    <span className="r-code g">{r.code}</span>
-                    <span className="r-name">{r.name}</span>
-                    <span className="r-tag g">✓ met</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+        {met.length>0 && <>
+          <button className="met-toggle" onClick={()=>setShowMet(x=>!x)}>
+            ✓ {met.length} requirements already satisfied by transfer {showMet?"▲":"▼"}
+          </button>
+          {showMet && (
+            <div className="result-list" style={{marginBottom:20}}>
+              {met.map(r=>(
+                <div key={r.code} className="result-row xfer">
+                  <span className="r-code g">{r.code}</span>
+                  <span className="r-name">{r.name}</span>
+                  <span className="r-tag g">✓ satisfied</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>}
         <div className="section-label" style={{color:"var(--text2)",marginBottom:16}}>
-          Remaining — {road.length} semester{road.length!==1?"s":""}
+          Remaining courses — {road.length} semester{road.length!==1?"s":""}
         </div>
         <div className="timeline">
           {road.map((sem,i)=>(
@@ -741,7 +788,7 @@ function StepRoadmap({program, courses, schools, requirements, onRestart, onBack
           </div>
         </div>
         <div className="advisor-note">
-          ⚠️ This roadmap is automatically generated based on your transfer credits and degree requirements. Course availability and prerequisites may vary — always confirm your plan with your academic advisor.
+          ⚠️ This roadmap is automatically generated based on your transfer credits and degree requirements uploaded by {sc?.name}. Course availability and prerequisites may vary — always confirm your plan with your academic advisor.
         </div>
       </>}
 
@@ -756,14 +803,15 @@ function StepRoadmap({program, courses, schools, requirements, onRestart, onBack
 
 // ─── Root App ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [step,setStep]         = useState(0); // 0=hero, 1-4=steps
-  const [program,setProgram]   = useState(null);
-  const [courses,setCourses]   = useState([]);
-  const [schools,setSchools]   = useState(SEED_SCHOOLS);
-  const [programs,setPrograms] = useState(SEED_PROGRAMS);
+  const [step,setStep]           = useState(0);
+  const [programName,setProgramName] = useState(null);
+  const [program,setProgram]     = useState(null);
+  const [courses,setCourses]     = useState([]);
+  const [schools,setSchools]     = useState(SEED_SCHOOLS);
+  const [programs,setPrograms]   = useState(SEED_PROGRAMS);
   const [ccCourses,setCcCourses] = useState(SEED_CC);
   const [requirements,setRequirements] = useState(SEED_REQS);
-  const [ready,setReady]       = useState(false);
+  const [ready,setReady]         = useState(false);
 
   useEffect(()=>{
     (async()=>{
@@ -784,13 +832,12 @@ export default function App() {
     })();
   },[]);
 
-  const restart = () => { setStep(0); setProgram(null); setCourses([]); };
+  const restart = () => { setStep(0); setProgramName(null); setProgram(null); setCourses([]); };
 
   return (
     <>
       <style>{CSS}</style>
       <div className="app">
-        {/* Nav */}
         <nav className="nav">
           <div className="logo" onClick={restart} style={{cursor:"pointer"}}>
             <div className="logo-mark">🎓</div>
@@ -804,7 +851,6 @@ export default function App() {
         {!ready ? (
           <p style={{color:"var(--text3)",marginTop:80}}>Loading…</p>
         ) : step===0 ? (
-          /* ── Hero ── */
           <div className="hero fade">
             <div className="hero-badge">🎓 Free Transfer Planning Tool</div>
             <h1 className="hero-title">
@@ -814,31 +860,20 @@ export default function App() {
               Find out exactly which community college courses transfer, how many credits you bring in, and get a personalized semester-by-semester graduation roadmap — in minutes.
             </p>
             <div className="hero-stats">
-              <div className="hero-stat">
-                <div className="hero-stat-n">12.4M</div>
-                <div className="hero-stat-l">CC Students</div>
-              </div>
-              <div className="hero-stat">
-                <div className="hero-stat-n">49%</div>
-                <div className="hero-stat-l">Plan to Transfer</div>
-              </div>
-              <div className="hero-stat">
-                <div className="hero-stat-n">70%</div>
-                <div className="hero-stat-l">Overspend to Graduate</div>
-              </div>
+              <div className="hero-stat"><div className="hero-stat-n">12.4M</div><div className="hero-stat-l">CC Students</div></div>
+              <div className="hero-stat"><div className="hero-stat-n">49%</div><div className="hero-stat-l">Plan to Transfer</div></div>
+              <div className="hero-stat"><div className="hero-stat-n">70%</div><div className="hero-stat-l">Overspend to Graduate</div></div>
             </div>
-            <button className="hero-cta" onClick={()=>setStep(1)}>
-              Plan My Transfer →
-            </button>
+            <button className="hero-cta" onClick={()=>setStep(1)}>Plan My Transfer →</button>
           </div>
         ) : (
-          /* ── Steps ── */
           <div className="card">
             <Steps step={step}/>
-            {step===1 && <StepSearch programs={programs} schools={schools} onSelect={p=>{setProgram(p);setStep(2);}}/>}
-            {step===2 && <StepCourses program={program} ccCourses={ccCourses} onSubmit={cs=>{setCourses(cs);setStep(3);}} onBack={()=>setStep(1)}/>}
-            {step===3 && <StepResults program={program} courses={courses} schools={schools} onNext={()=>setStep(4)} onBack={()=>setStep(2)}/>}
-            {step===4 && <StepRoadmap program={program} courses={courses} schools={schools} requirements={requirements} onRestart={restart} onBack={()=>setStep(3)}/>}
+            {step===1 && <StepProgram programs={programs} onSelect={name=>{setProgramName(name);setStep(2);}}/>}
+            {step===2 && <StepSchool programName={programName} programs={programs} schools={schools} onSelect={p=>{setProgram(p);setStep(3);}} onBack={()=>setStep(1)}/>}
+            {step===3 && <StepCourses program={program} ccCourses={ccCourses} onSubmit={cs=>{setCourses(cs);setStep(4);}} onBack={()=>setStep(2)}/>}
+            {step===4 && <StepResults program={program} courses={courses} schools={schools} onNext={()=>setStep(5)} onBack={()=>setStep(3)}/>}
+            {step===5 && <StepRoadmap program={program} courses={courses} schools={schools} requirements={requirements} onRestart={restart} onBack={()=>setStep(4)}/>}
           </div>
         )}
 

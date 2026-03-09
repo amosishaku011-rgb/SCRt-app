@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
-const DATA_VERSION = "v6";
+const DATA_VERSION = "v7";
 const db = {
   async get(k)   { try { const v=localStorage.getItem(k); return v?JSON.parse(v):null; } catch{return null;} },
   async set(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); } catch{} },
@@ -856,12 +856,15 @@ export default function App() {
     (async()=>{
       const ver = await db.get("scrt:version");
       if(ver !== DATA_VERSION){
-        await db.set("scrt:version", DATA_VERSION);
-        await db.set("scrt:programs", SEED_PROGRAMS);
-        await db.set("scrt:courses", SEED_CC);
+        // New version — wipe old cache, write fresh seed data
+        await db.set("scrt:version",      DATA_VERSION);
+        await db.set("scrt:schools",      SEED_SCHOOLS);
+        await db.set("scrt:programs",     SEED_PROGRAMS);
+        await db.set("scrt:courses",      SEED_CC);
         await db.set("scrt:requirements", SEED_REQS);
-        await db.set("scrt:schools", SEED_SCHOOLS);
+        // Use seed data directly (already in state as defaults)
       } else {
+        // Same version — load admin-edited data from cache
         const ss=await db.get("scrt:schools");      if(ss) setSchools(ss);
         const sp=await db.get("scrt:programs");     if(sp) setPrograms(sp);
         const sc=await db.get("scrt:courses");      if(sc) setCcCourses(sc);

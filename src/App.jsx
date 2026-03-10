@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
-const DATA_VERSION = "v9";
+const DATA_VERSION = "v10";
 const db = {
   async get(k)   { try { const v=localStorage.getItem(k); return v?JSON.parse(v):null; } catch{return null;} },
   async set(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); } catch{} },
@@ -24,16 +24,29 @@ function buildRoadmap(reqs, xferCodes) {
 }
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────
+// DATA ARCHITECTURE:
+// SEED_SCHOOLS  → all schools (universities + community colleges)
+// SEED_PROGRAMS → degree programs offered by universities
+// SEED_CC       → CC courses keyed by CC id. Just the course catalog — no transfer info.
+//                 {code, name, credits}
+// SEED_TRANSFER → transfer rules keyed by programId → array of rules set by UNIVERSITY admin
+//                 {ccId, ccCode, mapsTo, acceptedCredits, type:"degree"|"elective"|"none"}
+//                 "degree"   = counts toward degree requirements
+//                 "elective" = accepted but as free elective only
+//                 "none"     = not accepted at all
+// SEED_REQS     → degree requirements keyed by programId → array of courses still needed at university
+//                 {code, name, credits, semHint}
+
 const SEED_SCHOOLS = [
   // Universities
-  {id:"uic",       name:"University of Illinois Chicago",          short:"UIC",    type:"university"},
-  {id:"illinois",  name:"Univ. of Illinois Urbana-Champaign",      short:"UIUC",   type:"university"},
-  {id:"northwestern",name:"Northwestern University",               short:"NU",     type:"university"},
-  {id:"depaul",    name:"DePaul University",                       short:"DePaul", type:"university"},
+  {id:"uic",         name:"University of Illinois Chicago",     short:"UIC",    type:"university"},
+  {id:"illinois",    name:"Univ. of Illinois Urbana-Champaign", short:"UIUC",   type:"university"},
+  {id:"northwestern",name:"Northwestern University",            short:"NU",     type:"university"},
+  {id:"depaul",      name:"DePaul University",                  short:"DePaul", type:"university"},
   // Community Colleges
-  {id:"cod",       name:"College of DuPage",                       short:"COD",    type:"community"},
-  {id:"truman",    name:"Harry S Truman College",                  short:"Truman", type:"community"},
-  {id:"oakton",    name:"Oakton Community College",                short:"Oakton", type:"community"},
+  {id:"cod",         name:"College of DuPage",                  short:"COD",    type:"community"},
+  {id:"truman",      name:"Harry S Truman College",             short:"Truman", type:"community"},
+  {id:"oakton",      name:"Oakton Community College",           short:"Oakton", type:"community"},
 ];
 const SEED_PROGRAMS = [
   // Chemical Engineering — offered at UIC and UIUC
@@ -53,76 +66,176 @@ const SEED_PROGRAMS = [
   // Finance
   {id:"fin_depaul",name:"Finance",               school:"depaul",  totalCredits:120, icon:"💰"},
 ];
-// CC courses are keyed by CC school ID
-// Each course has: code, name, credits, transferable, mapsTo (university course code)
+// ── CC Course Catalogs (uploaded by CC admins) ────────────────────────────────
+// Just the course list — no transfer info here. University decides what transfers.
 const SEED_CC = {
-  // ── College of DuPage ──────────────────────────────────────────────────────
   cod:[
-    {code:"MATH 2231",name:"Calculus I",credits:5,transferable:true,mapsTo:"MATH 180"},
-    {code:"MATH 2232",name:"Calculus II",credits:4,transferable:true,mapsTo:"MATH 181"},
-    {code:"MATH 2233",name:"Calculus III",credits:4,transferable:true,mapsTo:"MATH 210"},
-    {code:"MATH 2255",name:"Differential Equations",credits:3,transferable:true,mapsTo:"MATH 220"},
-    {code:"PHYS 2111",name:"Physics I — Mechanics",credits:4,transferable:true,mapsTo:"PHYS 141"},
-    {code:"PHYS 2112",name:"Physics II — E&M",credits:4,transferable:true,mapsTo:"PHYS 142"},
-    {code:"CHEM 1551",name:"General Chemistry I",credits:4,transferable:true,mapsTo:"CHEM 122",acceptedCredits:3},
-    {code:"CHEM 1552",name:"General Chemistry II",credits:4,transferable:true,mapsTo:"CHEM 123",acceptedCredits:3},
-    {code:"CHEM 1553",name:"Gen. Chemistry Lab I",credits:1,transferable:true,mapsTo:"CHEM 124",elective:false},
-    {code:"CHEM 1554",name:"Gen. Chemistry Lab II",credits:1,transferable:true,mapsTo:"CHEM 125"},
-    {code:"CHEM 2210",name:"Organic Chemistry I",credits:4,transferable:true,mapsTo:"CHEM 232"},
-    {code:"ENGR 1100",name:"Introduction to Engineering",credits:1,transferable:true,mapsTo:"ENGR 100"},
-    {code:"CIS 2531",name:"Scientific Programming",credits:3,transferable:true,mapsTo:"CS 109"},
-    {code:"ENGL 1101",name:"Composition I",credits:3,transferable:true,mapsTo:"ENGL 160",elective:true},
-    {code:"ECON 2201",name:"Microeconomics",credits:3,transferable:true,mapsTo:"ECON 121",elective:true},
-    {code:"ECON 2202",name:"Macroeconomics",credits:3,transferable:true,mapsTo:"ECON 120",elective:true},
-    {code:"ACCT 1101",name:"Financial Accounting",credits:4,transferable:true,mapsTo:"ACTG 210"},
-    {code:"BIOL 1151",name:"Anatomy & Physiology I",credits:4,transferable:true,mapsTo:"BIOS 250"},
-    {code:"BIOL 1152",name:"Anatomy & Physiology II",credits:4,transferable:true,mapsTo:"BIOS 251"},
-    {code:"BIOL 2210",name:"Microbiology",credits:4,transferable:true,mapsTo:"BIOS 220"},
-    {code:"PSYC 1100",name:"General Psychology",credits:3,transferable:true,mapsTo:"PSYC 100",elective:true},
+    {code:"MATH 2231",name:"Calculus I",                  credits:5},
+    {code:"MATH 2232",name:"Calculus II",                 credits:4},
+    {code:"MATH 2233",name:"Calculus III",                credits:4},
+    {code:"MATH 2255",name:"Differential Equations",      credits:3},
+    {code:"PHYS 2111",name:"Physics I — Mechanics",       credits:4},
+    {code:"PHYS 2112",name:"Physics II — E&M",            credits:4},
+    {code:"CHEM 1551",name:"General Chemistry I",         credits:4},
+    {code:"CHEM 1552",name:"General Chemistry II",        credits:4},
+    {code:"CHEM 1553",name:"Gen. Chemistry Lab I",        credits:1},
+    {code:"CHEM 1554",name:"Gen. Chemistry Lab II",       credits:1},
+    {code:"CHEM 2210",name:"Organic Chemistry I",         credits:4},
+    {code:"ENGR 1100",name:"Introduction to Engineering", credits:1},
+    {code:"CIS 2531", name:"Scientific Programming",      credits:3},
+    {code:"ENGL 1101",name:"Composition I",               credits:3},
+    {code:"ENGL 1102",name:"Composition II",              credits:3},
+    {code:"ECON 2201",name:"Microeconomics",              credits:3},
+    {code:"ECON 2202",name:"Macroeconomics",              credits:3},
+    {code:"ACCT 1101",name:"Financial Accounting",        credits:4},
+    {code:"BIOL 1151",name:"Anatomy & Physiology I",      credits:4},
+    {code:"BIOL 1152",name:"Anatomy & Physiology II",     credits:4},
+    {code:"BIOL 2210",name:"Microbiology",                credits:4},
+    {code:"PSYC 1100",name:"General Psychology",          credits:3},
   ],
-  // ── Harry S Truman College ─────────────────────────────────────────────────
   truman:[
-    {code:"MTH 205",name:"Calculus I",credits:5,transferable:true,mapsTo:"MATH 180"},
-    {code:"MTH 206",name:"Calculus II",credits:4,transferable:true,mapsTo:"MATH 181"},
-    {code:"MTH 207",name:"Calculus III",credits:4,transferable:true,mapsTo:"MATH 210"},
-    {code:"MTH 212",name:"Differential Equations",credits:3,transferable:true,mapsTo:"MATH 220"},
-    {code:"PHY 201",name:"Physics I — Mechanics",credits:4,transferable:true,mapsTo:"PHYS 141"},
-    {code:"PHY 202",name:"Physics II — E&M",credits:4,transferable:true,mapsTo:"PHYS 142"},
-    {code:"CHM 201",name:"General Chemistry I",credits:4,transferable:true,mapsTo:"CHEM 122",acceptedCredits:3},
-    {code:"CHM 202",name:"General Chemistry II",credits:4,transferable:true,mapsTo:"CHEM 123"},
-    {code:"CHM 201L",name:"Gen. Chemistry Lab I",credits:1,transferable:true,mapsTo:"CHEM 124"},
-    {code:"CHM 202L",name:"Gen. Chemistry Lab II",credits:1,transferable:true,mapsTo:"CHEM 125"},
-    {code:"CHM 211",name:"Organic Chemistry I",credits:4,transferable:true,mapsTo:"CHEM 232"},
-    {code:"ENG 101",name:"Composition I",credits:3,transferable:true,mapsTo:"ENGL 160",elective:true},
-    {code:"CSC 111",name:"Intro to Programming",credits:3,transferable:true,mapsTo:"CS 109"},
-    {code:"ECO 201",name:"Microeconomics",credits:3,transferable:true,mapsTo:"ECON 121",elective:true},
-    {code:"ECO 202",name:"Macroeconomics",credits:3,transferable:true,mapsTo:"ECON 120",elective:true},
-    {code:"ACC 101",name:"Financial Accounting",credits:4,transferable:true,mapsTo:"ACTG 210"},
-    {code:"BIO 201",name:"Anatomy & Physiology I",credits:4,transferable:true,mapsTo:"BIOS 250"},
-    {code:"BIO 202",name:"Anatomy & Physiology II",credits:4,transferable:true,mapsTo:"BIOS 251"},
-    {code:"PSY 101",name:"General Psychology",credits:3,transferable:true,mapsTo:"PSYC 100",elective:true},
+    {code:"MTH 205",  name:"Calculus I",                  credits:5},
+    {code:"MTH 206",  name:"Calculus II",                 credits:4},
+    {code:"MTH 207",  name:"Calculus III",                credits:4},
+    {code:"MTH 212",  name:"Differential Equations",      credits:3},
+    {code:"PHY 201",  name:"Physics I — Mechanics",       credits:4},
+    {code:"PHY 202",  name:"Physics II — E&M",            credits:4},
+    {code:"CHM 201",  name:"General Chemistry I",         credits:4},
+    {code:"CHM 202",  name:"General Chemistry II",        credits:4},
+    {code:"CHM 201L", name:"Gen. Chemistry Lab I",        credits:1},
+    {code:"CHM 202L", name:"Gen. Chemistry Lab II",       credits:1},
+    {code:"CHM 211",  name:"Organic Chemistry I",         credits:4},
+    {code:"ENG 101",  name:"Composition I",               credits:3},
+    {code:"ENG 102",  name:"Composition II",              credits:3},
+    {code:"CSC 111",  name:"Scientific Programming",      credits:3},
+    {code:"ECO 201",  name:"Microeconomics",              credits:3},
+    {code:"ECO 202",  name:"Macroeconomics",              credits:3},
+    {code:"ACC 101",  name:"Financial Accounting",        credits:4},
+    {code:"BIO 201",  name:"Anatomy & Physiology I",      credits:4},
+    {code:"BIO 202",  name:"Anatomy & Physiology II",     credits:4},
+    {code:"PSY 101",  name:"General Psychology",          credits:3},
   ],
-  // ── Oakton Community College ───────────────────────────────────────────────
   oakton:[
-    {code:"MAT 251",name:"Calculus I",credits:5,transferable:true,mapsTo:"MATH 180"},
-    {code:"MAT 252",name:"Calculus II",credits:4,transferable:true,mapsTo:"MATH 181"},
-    {code:"MAT 253",name:"Calculus III",credits:4,transferable:true,mapsTo:"MATH 210"},
-    {code:"MAT 260",name:"Differential Equations",credits:3,transferable:true,mapsTo:"MATH 220"},
-    {code:"PHY 221",name:"Physics I — Mechanics",credits:4,transferable:true,mapsTo:"PHYS 141"},
-    {code:"PHY 222",name:"Physics II — E&M",credits:4,transferable:true,mapsTo:"PHYS 142"},
-    {code:"CHM 210",name:"General Chemistry I",credits:4,transferable:true,mapsTo:"CHEM 122",acceptedCredits:3},
-    {code:"CHM 211",name:"General Chemistry II",credits:4,transferable:true,mapsTo:"CHEM 123"},
-    {code:"CHM 210L",name:"Gen. Chemistry Lab I",credits:1,transferable:true,mapsTo:"CHEM 124"},
-    {code:"CHM 211L",name:"Gen. Chemistry Lab II",credits:1,transferable:true,mapsTo:"CHEM 125"},
-    {code:"CHM 220",name:"Organic Chemistry I",credits:4,transferable:true,mapsTo:"CHEM 232"},
-    {code:"EGL 101",name:"Composition I",credits:3,transferable:true,mapsTo:"ENGL 160",elective:true},
-    {code:"CSC 155",name:"Scientific Programming",credits:3,transferable:true,mapsTo:"CS 109"},
-    {code:"ECN 211",name:"Microeconomics",credits:3,transferable:true,mapsTo:"ECON 121",elective:true},
-    {code:"ECN 212",name:"Macroeconomics",credits:3,transferable:true,mapsTo:"ECON 120",elective:true},
-    {code:"ACT 101",name:"Financial Accounting",credits:4,transferable:true,mapsTo:"ACTG 210"},
-    {code:"BIO 231",name:"Anatomy & Physiology I",credits:4,transferable:true,mapsTo:"BIOS 250"},
-    {code:"BIO 232",name:"Anatomy & Physiology II",credits:4,transferable:true,mapsTo:"BIOS 251"},
-    {code:"PSY 101",name:"General Psychology",credits:3,transferable:true,mapsTo:"PSYC 100",elective:true},
+    {code:"MAT 251",  name:"Calculus I",                  credits:5},
+    {code:"MAT 252",  name:"Calculus II",                 credits:4},
+    {code:"MAT 253",  name:"Calculus III",                credits:4},
+    {code:"MAT 260",  name:"Differential Equations",      credits:3},
+    {code:"PHY 221",  name:"Physics I — Mechanics",       credits:4},
+    {code:"PHY 222",  name:"Physics II — E&M",            credits:4},
+    {code:"CHM 210",  name:"General Chemistry I",         credits:4},
+    {code:"CHM 211",  name:"General Chemistry II",        credits:4},
+    {code:"CHM 210L", name:"Gen. Chemistry Lab I",        credits:1},
+    {code:"CHM 211L", name:"Gen. Chemistry Lab II",       credits:1},
+    {code:"CHM 220",  name:"Organic Chemistry I",         credits:4},
+    {code:"EGL 101",  name:"Composition I",               credits:3},
+    {code:"EGL 102",  name:"Composition II",              credits:3},
+    {code:"CSC 155",  name:"Scientific Programming",      credits:3},
+    {code:"ECN 211",  name:"Microeconomics",              credits:3},
+    {code:"ECN 212",  name:"Macroeconomics",              credits:3},
+    {code:"ACT 101",  name:"Financial Accounting",        credits:4},
+    {code:"BIO 231",  name:"Anatomy & Physiology I",      credits:4},
+    {code:"BIO 232",  name:"Anatomy & Physiology II",     credits:4},
+    {code:"PSY 101",  name:"General Psychology",          credits:3},
+  ],
+};
+
+// ── Transfer Rules (set by UNIVERSITY admin, per program) ─────────────────────
+// type: "degree"   = counts toward degree requirements
+//       "elective" = accepted but only as free elective credit
+//       "reduced"  = transfers toward degree but fewer credits accepted
+//       "none"     = not accepted at all
+// ccId: which CC this rule applies to
+// ccCode: the CC course code
+// mapsTo: equivalent university course code
+// acceptedCredits: only for "reduced" type — how many credits the university accepts
+const SEED_TRANSFER = {
+  // ── UIC Chemical Engineering ───────────────────────────────────────────────
+  che_uic:[
+    // College of DuPage
+    {ccId:"cod",ccCode:"MATH 2231",mapsTo:"MATH 180",type:"degree",acceptedCredits:5},
+    {ccId:"cod",ccCode:"MATH 2232",mapsTo:"MATH 181",type:"degree",acceptedCredits:4},
+    {ccId:"cod",ccCode:"MATH 2233",mapsTo:"MATH 210",type:"degree",acceptedCredits:4},
+    {ccId:"cod",ccCode:"MATH 2255",mapsTo:"MATH 220",type:"degree",acceptedCredits:3},
+    {ccId:"cod",ccCode:"PHYS 2111",mapsTo:"PHYS 141",type:"degree",acceptedCredits:4},
+    {ccId:"cod",ccCode:"PHYS 2112",mapsTo:"PHYS 142",type:"degree",acceptedCredits:4},
+    {ccId:"cod",ccCode:"CHEM 1551",mapsTo:"CHEM 122",type:"reduced",acceptedCredits:3},  // 4cr earned, 3cr accepted
+    {ccId:"cod",ccCode:"CHEM 1552",mapsTo:"CHEM 123",type:"reduced",acceptedCredits:3},
+    {ccId:"cod",ccCode:"CHEM 1553",mapsTo:"CHEM 124",type:"degree", acceptedCredits:1},
+    {ccId:"cod",ccCode:"CHEM 1554",mapsTo:"CHEM 125",type:"degree", acceptedCredits:1},
+    {ccId:"cod",ccCode:"CHEM 2210",mapsTo:"CHEM 232",type:"degree", acceptedCredits:4},
+    {ccId:"cod",ccCode:"ENGR 1100",mapsTo:"ENGR 100",type:"degree", acceptedCredits:1},
+    {ccId:"cod",ccCode:"CIS 2531", mapsTo:"CS 109",  type:"degree", acceptedCredits:3},
+    {ccId:"cod",ccCode:"ENGL 1101",mapsTo:"ENGL 160",type:"elective",acceptedCredits:3}, // CHE doesn't require English
+    {ccId:"cod",ccCode:"ENGL 1102",mapsTo:"ENGL 161",type:"elective",acceptedCredits:3},
+    {ccId:"cod",ccCode:"ECON 2201",mapsTo:null,       type:"none"},   // not accepted for CHE
+    {ccId:"cod",ccCode:"ECON 2202",mapsTo:null,       type:"none"},
+    {ccId:"cod",ccCode:"ACCT 1101",mapsTo:null,       type:"none"},
+    {ccId:"cod",ccCode:"BIOL 1151",mapsTo:null,       type:"none"},   // Biology not relevant to CHE at UIC
+    {ccId:"cod",ccCode:"BIOL 1152",mapsTo:null,       type:"none"},
+    {ccId:"cod",ccCode:"BIOL 2210",mapsTo:null,       type:"none"},
+    {ccId:"cod",ccCode:"PSYC 1100",mapsTo:null,       type:"none"},
+    // Harry S Truman College
+    {ccId:"truman",ccCode:"MTH 205",  mapsTo:"MATH 180",type:"degree", acceptedCredits:5},
+    {ccId:"truman",ccCode:"MTH 206",  mapsTo:"MATH 181",type:"degree", acceptedCredits:4},
+    {ccId:"truman",ccCode:"MTH 207",  mapsTo:"MATH 210",type:"degree", acceptedCredits:4},
+    {ccId:"truman",ccCode:"MTH 212",  mapsTo:"MATH 220",type:"degree", acceptedCredits:3},
+    {ccId:"truman",ccCode:"PHY 201",  mapsTo:"PHYS 141",type:"degree", acceptedCredits:4},
+    {ccId:"truman",ccCode:"PHY 202",  mapsTo:"PHYS 142",type:"degree", acceptedCredits:4},
+    {ccId:"truman",ccCode:"CHM 201",  mapsTo:"CHEM 122",type:"reduced",acceptedCredits:3},
+    {ccId:"truman",ccCode:"CHM 202",  mapsTo:"CHEM 123",type:"degree", acceptedCredits:4},
+    {ccId:"truman",ccCode:"CHM 201L", mapsTo:"CHEM 124",type:"degree", acceptedCredits:1},
+    {ccId:"truman",ccCode:"CHM 202L", mapsTo:"CHEM 125",type:"degree", acceptedCredits:1},
+    {ccId:"truman",ccCode:"CHM 211",  mapsTo:"CHEM 232",type:"degree", acceptedCredits:4},
+    {ccId:"truman",ccCode:"CSC 111",  mapsTo:"CS 109",  type:"degree", acceptedCredits:3},
+    {ccId:"truman",ccCode:"ENG 101",  mapsTo:"ENGL 160",type:"elective",acceptedCredits:3},
+    {ccId:"truman",ccCode:"ENG 102",  mapsTo:"ENGL 161",type:"elective",acceptedCredits:3},
+    {ccId:"truman",ccCode:"ECO 201",  mapsTo:null,       type:"none"},
+    {ccId:"truman",ccCode:"ECO 202",  mapsTo:null,       type:"none"},
+    {ccId:"truman",ccCode:"ACC 101",  mapsTo:null,       type:"none"},
+    {ccId:"truman",ccCode:"BIO 201",  mapsTo:null,       type:"none"},
+    {ccId:"truman",ccCode:"BIO 202",  mapsTo:null,       type:"none"},
+    {ccId:"truman",ccCode:"PSY 101",  mapsTo:null,       type:"none"},
+    // Oakton Community College
+    {ccId:"oakton",ccCode:"MAT 251",  mapsTo:"MATH 180",type:"degree", acceptedCredits:5},
+    {ccId:"oakton",ccCode:"MAT 252",  mapsTo:"MATH 181",type:"degree", acceptedCredits:4},
+    {ccId:"oakton",ccCode:"MAT 253",  mapsTo:"MATH 210",type:"degree", acceptedCredits:4},
+    {ccId:"oakton",ccCode:"MAT 260",  mapsTo:"MATH 220",type:"degree", acceptedCredits:3},
+    {ccId:"oakton",ccCode:"PHY 221",  mapsTo:"PHYS 141",type:"degree", acceptedCredits:4},
+    {ccId:"oakton",ccCode:"PHY 222",  mapsTo:"PHYS 142",type:"degree", acceptedCredits:4},
+    {ccId:"oakton",ccCode:"CHM 210",  mapsTo:"CHEM 122",type:"reduced",acceptedCredits:3},
+    {ccId:"oakton",ccCode:"CHM 211",  mapsTo:"CHEM 123",type:"degree", acceptedCredits:4},
+    {ccId:"oakton",ccCode:"CHM 210L", mapsTo:"CHEM 124",type:"degree", acceptedCredits:1},
+    {ccId:"oakton",ccCode:"CHM 211L", mapsTo:"CHEM 125",type:"degree", acceptedCredits:1},
+    {ccId:"oakton",ccCode:"CHM 220",  mapsTo:"CHEM 232",type:"degree", acceptedCredits:4},
+    {ccId:"oakton",ccCode:"CSC 155",  mapsTo:"CS 109",  type:"degree", acceptedCredits:3},
+    {ccId:"oakton",ccCode:"EGL 101",  mapsTo:"ENGL 160",type:"elective",acceptedCredits:3},
+    {ccId:"oakton",ccCode:"EGL 102",  mapsTo:"ENGL 161",type:"elective",acceptedCredits:3},
+    {ccId:"oakton",ccCode:"ECN 211",  mapsTo:null,       type:"none"},
+    {ccId:"oakton",ccCode:"ECN 212",  mapsTo:null,       type:"none"},
+    {ccId:"oakton",ccCode:"ACT 101",  mapsTo:null,       type:"none"},
+    {ccId:"oakton",ccCode:"BIO 231",  mapsTo:null,       type:"none"},
+    {ccId:"oakton",ccCode:"BIO 232",  mapsTo:null,       type:"none"},
+    {ccId:"oakton",ccCode:"PSY 101",  mapsTo:null,       type:"none"},
+  ],
+  // ── UIC Nursing ───────────────────────────────────────────────────────────
+  nurs_uic:[
+    {ccId:"cod",ccCode:"BIOL 1151",mapsTo:"BIOS 250",type:"degree", acceptedCredits:4},
+    {ccId:"cod",ccCode:"BIOL 1152",mapsTo:"BIOS 251",type:"degree", acceptedCredits:4},
+    {ccId:"cod",ccCode:"BIOL 2210",mapsTo:"BIOS 220",type:"degree", acceptedCredits:4},
+    {ccId:"cod",ccCode:"CHEM 1551",mapsTo:"CHEM 112",type:"degree", acceptedCredits:4},
+    {ccId:"cod",ccCode:"PSYC 1100",mapsTo:"PSYC 100",type:"degree", acceptedCredits:3},
+    {ccId:"cod",ccCode:"ENGL 1101",mapsTo:"ENGL 160",type:"degree", acceptedCredits:3},
+    {ccId:"cod",ccCode:"MATH 2231",mapsTo:null,       type:"none"},   // Calc not needed for Nursing
+    {ccId:"truman",ccCode:"BIO 201",  mapsTo:"BIOS 250",type:"degree",acceptedCredits:4},
+    {ccId:"truman",ccCode:"BIO 202",  mapsTo:"BIOS 251",type:"degree",acceptedCredits:4},
+    {ccId:"truman",ccCode:"CHM 201",  mapsTo:"CHEM 112",type:"degree",acceptedCredits:4},
+    {ccId:"truman",ccCode:"PSY 101",  mapsTo:"PSYC 100",type:"degree",acceptedCredits:3},
+    {ccId:"truman",ccCode:"ENG 101",  mapsTo:"ENGL 160",type:"degree",acceptedCredits:3},
+    {ccId:"oakton",ccCode:"BIO 231",  mapsTo:"BIOS 250",type:"degree",acceptedCredits:4},
+    {ccId:"oakton",ccCode:"BIO 232",  mapsTo:"BIOS 251",type:"degree",acceptedCredits:4},
+    {ccId:"oakton",ccCode:"CHM 210",  mapsTo:"CHEM 112",type:"degree",acceptedCredits:4},
+    {ccId:"oakton",ccCode:"PSY 101",  mapsTo:"PSYC 100",type:"degree",acceptedCredits:3},
+    {ccId:"oakton",ccCode:"EGL 101",  mapsTo:"ENGL 160",type:"degree",acceptedCredits:3},
   ],
 };
 const SEED_REQS = {
@@ -668,30 +781,50 @@ function StepCourses({program, ccSchoolId, ccCourses, onSubmit, onBack}) {
 }
 
 // ─── Step 4: Transfer Report ──────────────────────────────────────────────────
-function StepResults({program, courses, schools, onNext, onBack}) {
-  // 4 categories:
-  // 1. transferable=true, !elective, no acceptedCredits or equal → full credit toward degree
-  // 2. transferable=true, !elective, acceptedCredits < credits   → reduced credits
-  // 3. transferable=true, elective=true                          → elective only
-  // 4. transferable=false                                        → not accepted
-  const toward   = courses.filter(c=>c.transferable && !c.elective && (c.acceptedCredits===undefined || c.acceptedCredits===c.credits));
-  const reduced  = courses.filter(c=>c.transferable && !c.elective && c.acceptedCredits!==undefined && c.acceptedCredits < c.credits);
-  const elective = courses.filter(c=>c.transferable && c.elective);
-  const none     = courses.filter(c=>!c.transferable);
-  const degreeCr   = toward.reduce((a,c)=>a+c.credits,0) + reduced.reduce((a,c)=>a+(c.acceptedCredits||0),0);
-  const electiveCr = elective.reduce((a,c)=>a+c.credits,0);
+function StepResults({program, selectedCourses, ccSchoolId, transferRules, schools, onNext, onBack}) {
+  // selectedCourses = CC courses the student ticked {code, name, credits}
+  // transferRules[programId] = array of {ccId, ccCode, mapsTo, type, acceptedCredits}
+  // type: "degree" | "elective" | "reduced" | "none"
+
+  const rules = (transferRules[program.id]||[]).filter(r=>r.ccId===ccSchoolId);
+  const ruleMap = {}; // ccCode → rule
+  rules.forEach(r=>{ ruleMap[r.ccCode]=r; });
+
+  const toward   = []; // full credit toward degree
+  const reduced  = []; // reduced credits toward degree
+  const elective = []; // elective only
+  const none     = []; // not accepted
+
+  selectedCourses.forEach(course => {
+    const rule = ruleMap[course.code];
+    if (!rule || rule.type==="none") {
+      none.push({...course, rule});
+    } else if (rule.type==="degree") {
+      toward.push({...course, mapsTo:rule.mapsTo, acceptedCredits:rule.acceptedCredits});
+    } else if (rule.type==="reduced") {
+      reduced.push({...course, mapsTo:rule.mapsTo, acceptedCredits:rule.acceptedCredits});
+    } else if (rule.type==="elective") {
+      elective.push({...course, mapsTo:rule.mapsTo, acceptedCredits:rule.acceptedCredits});
+    } else {
+      none.push({...course, rule});
+    }
+  });
+
+  const degreeCr   = toward.reduce((a,c)=>a+c.acceptedCredits,0) + reduced.reduce((a,c)=>a+c.acceptedCredits,0);
+  const electiveCr = elective.reduce((a,c)=>a+c.acceptedCredits,0);
   const pct = Math.min(100, Math.round((degreeCr/program.totalCredits)*100));
   const sc  = schools.find(s=>s.id===program.school);
+
   return (
     <div className="fade">
       <h2 className="step-title">Transfer Report</h2>
-      <p className="step-sub">{program.icon} {program.name} at {sc?.short||sc?.name} · Here's what transfers.</p>
+      <p className="step-sub">{program.icon} {program.name} at {sc?.short||sc?.name} · Here is what transfers.</p>
 
       <div className="stat-grid">
         <div className="stat-box g">
           <div className="stat-num">{degreeCr}</div>
           <div className="stat-lbl">Degree Credits</div>
-          <div className="stat-sub">{toward.length} course{toward.length!==1?"s":""}</div>
+          <div className="stat-sub">{toward.length+reduced.length} course{(toward.length+reduced.length)!==1?"s":""}</div>
         </div>
         <div className="stat-box a">
           <div className="stat-num">{electiveCr}</div>
@@ -703,32 +836,29 @@ function StepResults({program, courses, schools, onNext, onBack}) {
           <div className="stat-lbl">Of Degree Done</div>
         </div>
       </div>
-
-      <div className="prog-bar-bg">
-        <div className="prog-bar-fill" style={{width:pct+"%"}}/>
-      </div>
+      <div className="prog-bar-bg"><div className="prog-bar-fill" style={{width:pct+"%"}}/></div>
 
       {toward.length>0 && <>
-        <div className="section-label" style={{color:"var(--accent4)",marginBottom:10}}>
-          ✅ Transfers Toward Degree ({toward.length} courses · {degreeCr} credits)
+        <div className="section-label" style={{color:"var(--accent4)",marginBottom:10,marginTop:18}}>
+          ✅ Transfers Toward Degree ({toward.length} courses · {toward.reduce((a,c)=>a+c.acceptedCredits,0)} credits)
         </div>
         <div className="result-list">
           {toward.map(c=>(
             <div key={c.code} className="result-row xfer">
               <span className="r-code g">{c.code}</span>
               <span className="r-name">{c.name}</span>
-              <span className="r-tag g">{c.credits}cr → {c.mapsTo}</span>
+              <span className="r-tag g">{c.acceptedCredits}cr → {c.mapsTo}</span>
             </div>
           ))}
         </div>
       </>}
 
       {reduced.length>0 && <>
-        <div className="section-label" style={{color:"#ff9f43",marginBottom:10,marginTop:18}}>
-          ⚠️ Reduced Credits ({reduced.length} courses)
+        <div className="section-label" style={{color:"#ff9f43",marginBottom:6,marginTop:18}}>
+          ⚠️ Transfers With Reduced Credits ({reduced.length} courses)
         </div>
         <p style={{fontSize:12,color:"var(--text3)",marginBottom:10,fontFamily:"Inter,sans-serif"}}>
-          These courses transfer but {sc?.short||sc?.name} awards fewer credits than you earned at CC.
+          These courses transfer toward your degree but {sc?.short||sc?.name} awards fewer credits than you earned.
         </p>
         <div className="result-list">
           {reduced.map(c=>(
@@ -736,7 +866,7 @@ function StepResults({program, courses, schools, onNext, onBack}) {
               <span className="r-code" style={{color:"#ff9f43"}}>{c.code}</span>
               <span className="r-name">{c.name}</span>
               <span className="r-tag" style={{background:"#ff9f4320",color:"#ff9f43"}}>
-                {c.credits}cr earned → only {c.acceptedCredits}cr accepted · {c.mapsTo}
+                {c.credits}cr earned → {c.acceptedCredits}cr accepted · {c.mapsTo}
               </span>
             </div>
           ))}
@@ -744,29 +874,29 @@ function StepResults({program, courses, schools, onNext, onBack}) {
       </>}
 
       {elective.length>0 && <>
-        <div className="section-label" style={{color:"#f5a623",marginBottom:10,marginTop:18}}>
+        <div className="section-label" style={{color:"#a29bfe",marginBottom:6,marginTop:18}}>
           📚 Transfers as Elective Only ({elective.length} courses · {electiveCr} credits)
         </div>
         <p style={{fontSize:12,color:"var(--text3)",marginBottom:10,fontFamily:"Inter,sans-serif"}}>
-          These courses are accepted by {sc?.short||sc?.name} but do not count toward your {program.name} degree requirements. They may count as free electives.
+          {sc?.short||sc?.name} accepts these but they do not count toward your {program.name} degree requirements.
         </p>
         <div className="result-list">
           {elective.map(c=>(
-            <div key={c.code} className="result-row" style={{borderColor:"#f5a62340",background:"#f5a62308"}}>
-              <span className="r-code" style={{color:"#f5a623"}}>{c.code}</span>
+            <div key={c.code} className="result-row" style={{borderColor:"#a29bfe30",background:"#a29bfe08"}}>
+              <span className="r-code" style={{color:"#a29bfe"}}>{c.code}</span>
               <span className="r-name">{c.name}</span>
-              <span className="r-tag" style={{background:"#f5a62320",color:"#f5a623"}}>{c.credits}cr · elective</span>
+              <span className="r-tag" style={{background:"#a29bfe20",color:"#a29bfe"}}>{c.acceptedCredits}cr · elective only</span>
             </div>
           ))}
         </div>
       </>}
 
       {none.length>0 && <>
-        <div className="section-label red" style={{marginTop:18}}>
+        <div className="section-label" style={{color:"var(--accent2)",marginBottom:6,marginTop:18}}>
           ❌ Does Not Transfer ({none.length} courses)
         </div>
         <p style={{fontSize:12,color:"var(--text3)",marginBottom:10,fontFamily:"Inter,sans-serif"}}>
-          {sc?.short||sc?.name} does not accept these courses. Credits are lost upon transfer.
+          {sc?.short||sc?.name} does not accept these courses for the {program.name} program.
         </p>
         <div className="result-list">
           {none.map(c=>(
@@ -781,16 +911,19 @@ function StepResults({program, courses, schools, onNext, onBack}) {
 
       <div className="btn-row">
         <button className="btn btn-ghost" onClick={onBack}>← Back</button>
-        <button className="btn btn-primary" onClick={onNext}>Build My Roadmap →</button>
+        <button className="btn btn-primary" onClick={()=>onNext({toward,reduced,elective,none})}>Build My Roadmap →</button>
       </div>
     </div>
   );
 }
 
 // ─── Step 5: Roadmap ──────────────────────────────────────────────────────────
-function StepRoadmap({program, courses, schools, requirements, onRestart, onBack}) {
+function StepRoadmap({program, selectedCourses, ccSchoolId, transferRules, schools, requirements, onRestart, onBack}) {
   const [showMet, setShowMet] = useState(false);
-  const xferCodes = new Set(courses.filter(c=>c.transferable).flatMap(c=>[c.code,c.mapsTo].filter(Boolean)));
+  // courses that count toward degree = toward + reduced
+  const cats = selectedCourses; // {toward, reduced, elective, none}
+  const degreeTransfers = [...(cats.toward||[]), ...(cats.reduced||[])];
+  const xferCodes = new Set(degreeTransfers.flatMap(c=>[c.code, c.mapsTo].filter(Boolean)));
   const reqs = requirements[program.id]||[];
   const road = buildRoadmap(reqs, xferCodes);
   const met  = reqs.filter(r=>xferCodes.has(r.code)||xferCodes.has(r.equiv));
@@ -897,6 +1030,7 @@ export default function App() {
   const [schools,setSchools]     = useState(SEED_SCHOOLS);
   const [programs,setPrograms]   = useState(SEED_PROGRAMS);
   const [ccCourses,setCcCourses] = useState(SEED_CC);
+  const [transferRules,setTransferRules] = useState(SEED_TRANSFER);
   const [requirements,setRequirements] = useState(SEED_REQS);
   const [ready,setReady]         = useState(false);
 
@@ -909,6 +1043,7 @@ export default function App() {
         await db.set("scrt:schools",      SEED_SCHOOLS);
         await db.set("scrt:programs",     SEED_PROGRAMS);
         await db.set("scrt:courses",      SEED_CC);
+        await db.set("scrt:transfer",     SEED_TRANSFER);
         await db.set("scrt:requirements", SEED_REQS);
         // Use seed data directly (already in state as defaults)
       } else {
@@ -916,6 +1051,7 @@ export default function App() {
         const ss=await db.get("scrt:schools");      if(ss) setSchools(ss);
         const sp=await db.get("scrt:programs");     if(sp) setPrograms(sp);
         const sc=await db.get("scrt:courses");      if(sc) setCcCourses(sc);
+        const st=await db.get("scrt:transfer");     if(st) setTransferRules(st);
         const sr=await db.get("scrt:requirements"); if(sr) setRequirements(sr);
       }
       setReady(true);
@@ -962,8 +1098,8 @@ export default function App() {
             {step===1 && <StepProgram programs={programs} onSelect={name=>{setProgramName(name);setStep(2);}}/>}
             {step===2 && <StepSchool programName={programName} programs={programs} schools={schools} onSelect={(p,ccId)=>{setProgram(p);setCcSchool(ccId);setStep(3);}} onBack={()=>setStep(1)}/>}
             {step===3 && <StepCourses program={program} ccSchoolId={ccSchool} ccCourses={ccCourses} onSubmit={cs=>{setCourses(cs);setStep(4);}} onBack={()=>setStep(2)}/>}
-            {step===4 && <StepResults program={program} courses={courses} schools={schools} onNext={()=>setStep(5)} onBack={()=>setStep(3)}/>}
-            {step===5 && <StepRoadmap program={program} courses={courses} schools={schools} requirements={requirements} onRestart={restart} onBack={()=>setStep(4)}/>}
+            {step===4 && <StepResults program={program} selectedCourses={courses} ccSchoolId={ccSchool} transferRules={transferRules} schools={schools} onNext={(cats)=>{setCourses(cats);setStep(5);}} onBack={()=>setStep(3)}/>}
+            {step===5 && <StepRoadmap program={program} selectedCourses={courses} ccSchoolId={ccSchool} transferRules={transferRules} schools={schools} requirements={requirements} onRestart={restart} onBack={()=>setStep(4)}/>}
           </div>
         )}
 
